@@ -1,0 +1,84 @@
+name: Build NiceTry
+on:
+  workflow_dispatch:
+  push:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Write plugin files
+        run: |
+          mkdir -p src/main/java/com/nicetry src/main/resources
+          cat > pom.xml <<'EOT'
+          <project xmlns="http://maven.apache.org/POM/4.0.0">
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>com.nicetry</groupId>
+            <artifactId>NiceTry</artifactId>
+            <version>1.0</version>
+            <packaging>jar</packaging>
+            <properties>
+              <maven.compiler.source>21</maven.compiler.source>
+              <maven.compiler.target>21</maven.compiler.target>
+              <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+            </properties>
+            <repositories>
+              <repository>
+                <id>spigot-repo</id>
+                <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
+              </repository>
+            </repositories>
+            <dependencies>
+              <dependency>
+                <groupId>org.spigotmc</groupId>
+                <artifactId>spigot-api</artifactId>
+                <version>1.21.4-R0.1-SNAPSHOT</version>
+                <scope>provided</scope>
+              </dependency>
+            </dependencies>
+          </project>
+          EOT
+          cat > src/main/resources/plugin.yml <<'EOT'
+          name: NiceTry
+          version: 1.0
+          main: com.nicetry.NiceTry
+          api-version: "1.21"
+          EOT
+          cat > src/main/java/com/nicetry/NiceTry.java <<'EOT'
+          package com.nicetry;
+          import org.bukkit.entity.Player;
+          import org.bukkit.event.EventHandler;
+          import org.bukkit.event.EventPriority;
+          import org.bukkit.event.Listener;
+          import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+          import org.bukkit.plugin.java.JavaPlugin;
+          import java.util.regex.Pattern;
+          public class NiceTry extends JavaPlugin implements Listener {
+              private static final Pattern BLOCKED = Pattern.compile(
+                  "^/(?:luckperms:)?(?:lp|luckperms)\\s+user\\s+\\S+\\s+permission\\s+set(?:\\s.*)?$",
+                  Pattern.CASE_INSENSITIVE);
+              @Override
+              public void onEnable() {
+                  getServer().getPluginManager().registerEvents(this, this);
+              }
+              @EventHandler(priority = EventPriority.LOWEST)
+              public void onCommand(PlayerCommandPreprocessEvent event) {
+                  Player player = event.getPlayer();
+                  String message = event.getMessage().trim().replaceAll("\\s+", " ");
+                  if (!BLOCKED.matcher(message).matches()) return;
+                  if (player.isOp()) return;
+                  event.setCancelled(true);
+                  getLogger().warning(player.getName() + " tried: " + message);
+                  player.kickPlayer("NICE TRY");
+              }
+          }
+          EOT
+      - name: Build
+        run: mvn -B package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NiceTry-jar
+          path: target/NiceTry-1.0.jar
